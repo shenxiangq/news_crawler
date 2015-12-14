@@ -5,8 +5,7 @@ from mongo_connection import get_conn
 from apscheduler.schedulers.background import BackgroundScheduler
 import apscheduler.events
 
-from datetime import datetime
-import logging, logging.config
+import logging, logging.config, datetime
 
 
 class SeedBase(object):
@@ -31,9 +30,12 @@ class SeedScheduler(object):
                 apscheduler.events.EVENT_JOB_ERROR | apscheduler.events.EVENT_JOB_MISSED)
         for seed in base.get_all_seed():
             print seed
-            self.scheduler.add_job(self.handler, 'interval', args=(seed, self.logger),
-                    start_date=datetime.now(), seconds=seed['interval'],
-                    id=seed['jobid'])
+            start_date=datetime.datetime.now()
+            self.scheduler.add_job(self.handler.handle, 'interval',
+                    args=(seed, self.logger),
+                    seconds=seed['interval'],
+                    id=str(seed['jobid'])
+                    )
 
     def err_handle(self, ev):
         self.logger.error(str(ev))

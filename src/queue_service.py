@@ -4,7 +4,7 @@ class BlockingQueueService(object):
     def __init__(self, maxsize=1000):
         self.q = Queue.Queue(maxsize=maxsize)
 
-    def try_put(task):
+    def try_put(self, task):
         try:
             self.q.put(task, False)
             return True, 'success'
@@ -12,26 +12,26 @@ class BlockingQueueService(object):
             return False, 'queue full'
 
 
-    def put(timeout):
+    def put(self, task, timeout):
         try:
             self.q.put(task, True, timeout)
             return True, 'success'
         except Queue.Full:
             return False, 'queue full'
 
-    def try_get():
+    def try_get(self):
         try:
             task = self.q.get(False)
             return task, 'success'
-        except queue.empty:
-            return none, 'queue empty'
+        except queue.Empty:
+            return None, 'queue empty'
 
-    def get(timeout):
+    def get(self, timeout):
         try:
             task = self.q.get(True, timeout)
-            return True, 'success'
-        except Queue.Full:
-            return False, 'queue full'
+            return task, 'success'
+        except Queue.Empty:
+            return None, 'queue full'
 
 
 

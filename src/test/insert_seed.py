@@ -45,8 +45,6 @@ def test_dedup():
     co.remove({})
     now = datetime.datetime.now()
     co.create_index([('md5','hashed')])
-    co.drop_index('md5_hashed')
-    co.create_index('md5')
     objs = []
     for i in xrange(n):
         url = prefix + str(i)
@@ -59,13 +57,15 @@ def test_dedup():
     print 'total time:%.3f' % (end - start)
     print '%.3f / second' % (n/(end-start))
 
-    start = time.time()
+    query = []
     now = datetime.datetime.now()
     for i in xrange(n):
         url = prefix + str(i)
         b = Binary(md5(url).digest())
-        rs = co.find_one({'md5': b})
-    print rs
+        query.append(b)
+    start = time.time()
+    rs = co.find({'md5': {'$in': query}})
+    list(rs)
     end = time.time()
     print 'total time:%.3f' % (end - start)
     print '%.3f / second' % (n/(end-start))

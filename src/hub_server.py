@@ -6,8 +6,9 @@ from http_reactor import HttpReactor
 from queue_service import BlockingQueueService
 from seed_scheduler import SeedScheduler, SeedHandler
 from seed_task import SeedTask
+from hub_extractor import HubExtractor
 
-import logging, logging.config, signal, sys, threading, Queue
+import logging, logging.config, signal, sys, threading, Queue, ConfigParser
 from urllib import urlencode
 
 class HubServer(object):
@@ -16,6 +17,7 @@ class HubServer(object):
         self.logger = logging.getLogger("")
         self.reactor = reactor
         self.queue_service = queue_service
+        self.hub_extractor = HubExtractor(conf)
 
     def process_request(self, response, url):
         return
@@ -26,9 +28,11 @@ class HubServer(object):
     def process_body(self, body, url):
         self.logger.info("page body, url:%s, body:%s" %
                 (url, body[:100]))
+        self.hub_extractor.extract(body, url)
         print body[:100]
 
     def process_error(self, failure, url):
+        print failure.getErrorMessage()
         self.logger.error("download error, url:%s, msg:%s" %
                 (url, failure.getErrorMessage()))
 
@@ -68,7 +72,9 @@ def main():
     scheduler.start()
 
     reactor = HttpReactor()
-    hubserver = HubServer(reactor, queue_service, conf)
+    config = ConfigParser.ConfigParser()
+    config.read('../conf/url_dedup.conf')
+    hubserver = HubServer(reactor, queue_service, config)
     t = threading.Thread(target=hubserver.start)
     t.daemon = True
     t.start()

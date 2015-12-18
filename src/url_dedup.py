@@ -26,7 +26,7 @@ class URLDedup(object):
             self.bloom_filter = BloomFilter(bloom_capacity, bloom_error_rate)
 
     def hash_url(self, url):
-        return hashlib.md5(url).digest()
+        return Binary(hashlib.md5(url).digest())
 
     def insert_db(self, url, hash_url):
         '''
@@ -59,6 +59,32 @@ class URLDedup(object):
                 return False
         return self.query_db(url, hash_url) is not None
 
+    def insert_db_many(self, url_list, hash_list):
+        binary_list = [Binary(x) for x in hash_list]
+        objs = [dict(md5=Binary(x)) for x in hash_list]
+        self.collection.insert_many(objs)
+
+    def query_db_many(self, hash_list):
+        rs = self.collection.find({'md5': {'$in': hash_list}})
+        md5_list = [item.get('md5') for item in list(rs)]
+        return md5_list
+
+    def add_many(self, url_list):
+        hash_list = [self.hash_url(url) for url in url_list ]
+        if hash_list:
+            self.insert_db_many(url_list, hash_list)
+
+    def check_many(self, url_list):
+        hash_to_url = {self.hash_url(url): url for url in url_list}
+        md5_list = self.query_db_many(hash_to_url.keys())
+        md5_set = set(md5_list)
+        not_exist = [hash_to_url.get(md5) for md5 in hash_to_url if md5 not in md5_set]
+        return not_exist
+
+    def insert_not_exist(self, url_list):
+        not_exist = self.check_many(url_list)
+        self.add_many(not_exist)
+        return not_exist
 
 def main():
     conf = ConfigParser.ConfigParser()
@@ -67,21 +93,24 @@ def main():
     n = 10**5
     import time
     prefix="www.xxx.com"
-    start = time.time()
+    urls = []
     for i in xrange(n):
-        url_dedup.add(prefix+str(i))
-
+        urls.append(prefix+str(i))
+    start = time.time()
+    url_dedup.add_many(urls)
     end = time.time()
     print 'total time:%.3f' % (end - start)
     print '%.3f / second' % (n/(end-start))
 
-    start = time.time()
     for i in xrange(n):
-        url_dedup.check(prefix+str(i))
+        urls.append(prefix+str(i-100))
 
+    start = time.time()
+    not_exist = url_dedup.insert_not_exist(urls)
     end = time.time()
     print 'total time:%.3f' % (end - start)
     print '%.3f / second' % (n/(end-start))
+    print 'not exist:', len(not_exist)
 
 if __name__ == '__main__':
     main()

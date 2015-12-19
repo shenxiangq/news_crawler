@@ -27,7 +27,7 @@ for i in range(n):
 scheduler.add_listener(err_lis, apscheduler.events.EVENT_JOB_ERROR | apscheduler.events.EVENT_JOB_MISSED)
 scheduler.start()
 time.sleep(5)
-scheduler.shutdown()
+#scheduler.shutdown()
 s = 0
 for i in ll:
     s+=i

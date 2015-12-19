@@ -21,6 +21,7 @@ class HubExtractor(object):
         self.save_result(url, urls)
         not_exist = self.url_dedup.insert_not_exist(urls)
         self.logger.info('not exist urls. urls=%s' % str(not_exist))
+        return not_exist
 
     def save_result(self, url, extract_urls):
         collection = self.db['seed_task']

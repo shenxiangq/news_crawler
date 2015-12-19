@@ -7,6 +7,7 @@ from queue_service import BlockingQueueService
 from seed_scheduler import SeedScheduler, SeedHandler
 from seed_task import SeedTask
 from hub_extractor import HubExtractor
+from article_server import ArticleServer
 
 import logging, logging.config, signal, sys, threading, Queue, ConfigParser
 from urllib import urlencode
@@ -19,6 +20,9 @@ class HubServer(object):
         self.queue_service = queue_service
         self.hub_extractor = HubExtractor(conf)
 
+        # FIXME delete article server
+        self.article_server = ArticleServer(reactor, conf)
+
     def process_request(self, response, url):
         return
         self.logger.info("http response, url:%s, code:%s, phrase:%s, headers:%s" %
@@ -28,8 +32,12 @@ class HubServer(object):
     def process_body(self, body, url):
         self.logger.info("page body, url:%s, body:%s" %
                 (url, body[:100]))
-        self.hub_extractor.extract(body, url)
-        print body[:100]
+        not_exist = self.hub_extractor.extract(body, url)
+        if not not_exist:
+            print not_exist
+        for url in not_exist:
+            self.article_server.process_task(url)
+        #print body[:100]
 
     def process_error(self, failure, url):
         print failure.getErrorMessage()
@@ -42,7 +50,7 @@ class HubServer(object):
         bodyProcess = (self.process_body, (url,), {})
         errorProcess = (self.process_error, (url,), {})
 
-        print "process_task:", url
+        #print "process_task:", url
         self.reactor.download_and_process(url, None, requestProcess, bodyProcess, errorProcess, redirect=True)
 
     def start(self):
@@ -85,7 +93,6 @@ def main():
         queue_service.put(SeedTask(url), 1)
     hubserver.process_task(url)
     reactor.run()
-
 
 if __name__ == '__main__':
      main()

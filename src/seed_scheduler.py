@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding=gbk
 
-from seed_task import SeedTask
+from item import SeedTask
 from queue_service import BlockingQueueService
 
 from mongo_connection import get_conn

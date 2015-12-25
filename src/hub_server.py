@@ -5,7 +5,7 @@ from pprint import pformat
 from http_reactor import HttpReactor
 from queue_service import BlockingQueueService
 from seed_scheduler import SeedScheduler, SeedHandler
-from seed_task import SeedTask
+from item import SeedTask
 from hub_extractor import HubExtractor
 from article_server import ArticleServer
 
@@ -88,7 +88,7 @@ def main():
     t.start()
 
     url = "http://roll.news.sina.com.cn/s/channel.php?ch=01#col=89&spec=&type=&ch=01&k=&offset_page=0&offset_num=0&num=60&asc=&page=1"
-    url = "http://roll.news.sina.com.cn/s/channel.php?ch=01"
+    url = "http://www.163.com/"
     for _ in xrange(2):
         queue_service.put(SeedTask(url), 1)
     hubserver.process_task(url)

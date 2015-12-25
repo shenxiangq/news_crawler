@@ -6,6 +6,7 @@ import logging, logging.config
 
 from url_dedup import URLDedup
 from mongo_connection import get_conn
+from util import valid_a_href
 
 class HubExtractor(object):
 
@@ -17,7 +18,7 @@ class HubExtractor(object):
     def extract(self, body, url):
         tree = lxml.html.document_fromstring(body)
         a_elements = tree.xpath('//a')
-        urls = self.valid_a_href(a_elements)
+        urls = valid_a_href(a_elements)
         self.save_result(url, urls)
         not_exist = self.url_dedup.insert_not_exist(urls)
         self.logger.info('not exist urls. urls=%s' % str(not_exist))
@@ -27,9 +28,4 @@ class HubExtractor(object):
         collection = self.db['seed_task']
         collection.insert({'url': url, 'extract_urls': extract_urls})
 
-
-    def valid_a_href(self, a_elements):
-        hrefs = [a.get('href') for a in a_elements]
-        hrefs = [link for link in hrefs if link and link.startswith('http://')]
-        return hrefs
 

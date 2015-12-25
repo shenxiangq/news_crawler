@@ -10,20 +10,22 @@ import pymongo
 
 class URLDedup(object):
 
-    def __init__(self, conf):
+    def __init__(self, conf, collection=None):
+        self.collection = collection
         self.load_conf(conf)
 
     def load_conf(self, conf):
+        '''
         self.use_bloom = conf.getboolean('bloom', 'use_bloom')
         bloom_capacity = conf.getint('bloom', 'capacity')
         bloom_error_rate = conf.getfloat('bloom', 'error_rate')
+        '''
         host = conf.get('db', 'host')
         database = conf.get('db', 'database')
         port = conf.getint('db', 'port')
-        collection = conf.get('db', 'collection')
-        self.collection = pymongo.MongoClient(host, port)[database][collection]
-        if self.use_bloom:
-            self.bloom_filter = BloomFilter(bloom_capacity, bloom_error_rate)
+        if self.collection is None:
+            self.collection = conf.get('db', 'dedup_collection')
+        self.collection = pymongo.MongoClient(host, port)[database][self.collection]
 
     def hash_url(self, url):
         return Binary(hashlib.md5(url).digest())

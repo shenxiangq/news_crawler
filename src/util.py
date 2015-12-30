@@ -1,5 +1,8 @@
+# coding=utf-8
+
 import logging
 from tld import get_tld
+import chardet
 
 def init_log(filename):
     logging.basicConfig(filename)
@@ -12,3 +15,22 @@ def valid_a_href(a_elements, main_url=None):
         hrefs = [link for link in hrefs if get_tld(link, fail_silently=True) == main_tld]
 
     return hrefs
+
+def to_unicode(bytes_str):
+    '''
+    >>> print to_unicode('中文编码')
+    中文编码
+    '''
+    error_count = 50
+    gbk = bytes_str.decode('gbk', 'replace')
+    gbk_count = gbk.count(u'\ufffd')
+    if gbk_count < error_count:
+        return gbk.replace(u'\ufffd', '')
+    else:
+        utf = bytes_str.decode('utf-8', 'replace')
+        utf_count = utf.count(u'\ufffd')
+        if utf_count < error_count or utf_count < gbk_count:
+            return utf.replace(u'\ufffd', '')
+        else:
+            return gbk.replace(u'\ufffd', '')
+

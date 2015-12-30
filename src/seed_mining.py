@@ -13,19 +13,20 @@ from hub_extractor import HubExtractor
 from article_server import ArticleServer
 from db_helper import DBHelper
 from url_dedup import URLDedup
-from util import valid_a_href
+from util import valid_a_href, to_unicode
 import lxml.html.clean
 
 
 class MinerServer(object):
 
-    def __init__(self, reactor, conf):
+    def __init__(self, reactor, init_url, conf):
         self.logger = logging.getLogger("")
         self.reactor = reactor
         self._parse_conf(conf)
         self.db_helper = DBHelper(conf)
         self.url_dedup = URLDedup(conf)
         self.cleaner = lxml.html.clean.Cleaner(style=True, scripts=True, page_structure=False, safe_attrs_only=False)
+        self.init_url = init_url
 
     def _parse_conf(self, conf):
         self.get_delay = conf.getfloat('basic', 'delay')
@@ -41,10 +42,11 @@ class MinerServer(object):
 
     def process_body(self, body, task):
         url = task.get('url')
-        #self.logger.info("page body, url:%s, body:%s" %
-        #        (url, body[:100]))
-        #print url, body[:100]
+        #print url, body[:100][:1000]
+        print body.decode('gbk','ignore')[:100]
+        body = to_unicode(body)
         body = self.cleaner.clean_html(body)
+        self.logger.info("page body, url:%s, body:%s" % (url, body[:100]))
         self.db_helper.save_mining_result(body, task)
         if task.get('depth') <= self.maxdepth:
             tree = lxml.html.document_fromstring(body)
@@ -52,15 +54,15 @@ class MinerServer(object):
             #import pdb;pdb.set_trace()
             urls = valid_a_href(a_elements, url)
             not_exist = self.url_dedup.insert_not_exist(urls)
-            self.db_helper.insert_mining_task(task, urls)
-            #self.db_helper.insert_mining_task(task, not_exist)
+            #self.db_helper.insert_mining_task(task, urls)
+            self.db_helper.insert_mining_task(task, not_exist)
             if not not_exist:
                 print not_exist
-        print body[:100]
+        print url, body[:100]
 
     def process_error(self, failure, task):
         url = task.get('url')
-        print failure.getTraceback()
+        #print failure.getTraceback()
         self.logger.error("download error, url:%s, msg:%s" %
                 (url, failure.getTraceback()))
 
@@ -72,18 +74,19 @@ class MinerServer(object):
         errorProcess = (self.process_error, (task,), {})
 
         #print "process_task:", url
-        url = task.get('url').encode('utf-8')
         self.reactor.download_and_process(url, None, requestProcess, bodyProcess, errorProcess, redirect=True)
 
     def start(self):
-        init_url = 'http://www.163.com/'
         init_url = 'http://sports.163.com/'
-        first_task = self.db_helper.init_mining_job(init_url)
+        init_url = 'http://www.sina.com/'
+        init_url = 'http://news.qq.com/'
+        init_url = 'http://v.qq.com/cover/n/nwpc69jp1freit0.html'
+        first_task = self.db_helper.init_mining_job(self.init_url, continue_run=False)
         self.process_task(first_task)
         while True:
             try:
                 tasks = self.db_helper.get_mining_task(self.task_number)
-                print 'mining task', tasks
+                #print 'mining task', tasks
                 for task in tasks:
                     self.process_task(task)
                 time.sleep(self.get_delay)
@@ -101,10 +104,19 @@ def main():
     reactor = HttpReactor()
     config = ConfigParser.ConfigParser()
     config.read('../conf/seed_mining.conf')
-    miner_server = MinerServer(reactor, config)
-    t = threading.Thread(target=miner_server.start)
-    t.setDaemon(True)
-    t.start()
+    init_url = [
+            'http://news.qq.com/',
+            #'http://news.163.com/',
+            'http://news.sina.com.cn/',
+            #'http://news.ifeng.com/',
+            #'http://news.sohu.com/',
+            #'http://www.xinhuanet.com/',
+            ]
+    for url in init_url:
+        miner_server = MinerServer(reactor, [url], config)
+        t = threading.Thread(target=miner_server.start)
+        t.setDaemon(True)
+        t.start()
 
     url = 'http://sports.163.com/'
     #first_task = miner_server.db_helper.init_mining_job(url)

@@ -92,6 +92,17 @@ def main():
     conf = ConfigParser.ConfigParser()
     conf.read('../conf/url_dedup.conf')
     url_dedup = URLDedup(conf)
+    # time_test(url_dedup)
+    url_test()
+
+def url_test():
+    conf = ConfigParser.ConfigParser()
+    conf.read('../conf/seed_mining.conf')
+    url_dedup = URLDedup(conf)
+    url = 'http://news.qq.com/a/20151230/006412.htm'
+    print url_dedup.insert_not_exist([url, url])
+
+def time_test(url_dedup):
     n = 10**5
     import time
     prefix="www.xxx.com"

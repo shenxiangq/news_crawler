@@ -15,6 +15,8 @@ class HttpReactor(object):
 
     def download_and_process(self, url, headers, requestProcess, bodyProcess, errProcess, method='GET',
             redirect=False, retry=3, delay=10):
+        if headers is None:
+            headers = Headers({'User-Agent': ['Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.93 Safari/537.36']})
         reactor.callFromThread(self._download, url, headers, requestProcess, bodyProcess, errProcess, method, redirect, retry, delay)
 
 

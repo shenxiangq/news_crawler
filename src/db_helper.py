@@ -34,8 +34,14 @@ class DBHelper(object):
             self.task_co.update_many({'_id': {'$in': task_ids}}, {'$set': {'job_id': self.job_id}})
         return self.task_co.find_one({'_id': task_ids[0]})
 
-    def save_mining_result(self, body, task):
-        self.page_co.insert_one({'task_id': task['_id'], 'body': body, 'url': task['url'], 'time': datetime.now()})
+    def save_mining_result(self, body, body_size, task):
+        self.page_co.insert_one(dict(
+            task_id=task['_id'],
+            body=body,
+            body_size=body_size,
+            url=task['url'],
+            time=datetime.now()
+            ))
 
     def insert_mining_task(self, task, not_exist):
         ts = [dict(url=url, time=datetime.now(), depth=task.get('depth')+1, job_id=self.job_id) for url in not_exist]

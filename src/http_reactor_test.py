@@ -17,7 +17,7 @@ def process_error(failure, url):
 def main():
     reactor = HttpReactor()
 
-    url = 'http://news.sohu.com/'
+    url = 'http://news.sina.com.cn/c/2015-12-31/doc-ifxncyar6068322.shtml'
     requestProcess = (process_request, (url,), {})
     bodyProcess = (process_body, (url,), {})
     errorProcess = (process_error, (url,), {})

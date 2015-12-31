@@ -6,6 +6,7 @@ from pprint import pformat
 from datetime import datetime
 
 from http_reactor import HttpReactor
+from http_threadpool import HttpThreadpool
 from queue_service import BlockingQueueService
 from seed_scheduler import SeedScheduler, SeedHandler
 from item import SeedTask, MinerTask
@@ -19,9 +20,10 @@ import lxml.html.clean
 
 class MinerServer(object):
 
-    def __init__(self, reactor, init_url, conf):
+    def __init__(self, reactor, pool, init_url, conf):
         self.logger = logging.getLogger("")
         self.reactor = reactor
+        self.pool = pool
         self._parse_conf(conf)
         self.db_helper = DBHelper(conf)
         self.url_dedup = URLDedup(conf)
@@ -43,11 +45,11 @@ class MinerServer(object):
     def process_body(self, body, task):
         url = task.get('url')
         #print url, body[:100][:1000]
-        print body.decode('gbk','ignore')[:100]
+        body_size = len(body)
         body = to_unicode(body)
         body = self.cleaner.clean_html(body)
         self.logger.info("page body, url:%s, body:%s" % (url, body[:100]))
-        self.db_helper.save_mining_result(body, task)
+        self.db_helper.save_mining_result(body, body_size, task)
         if task.get('depth') <= self.maxdepth:
             tree = lxml.html.document_fromstring(body)
             a_elements = tree.xpath('//a')
@@ -75,6 +77,7 @@ class MinerServer(object):
 
         #print "process_task:", url
         self.reactor.download_and_process(url, None, requestProcess, bodyProcess, errorProcess, redirect=True)
+        #self.pool.download_and_process(url, bodyProcess)
 
     def start(self):
         init_url = 'http://sports.163.com/'
@@ -102,6 +105,7 @@ def main():
 
     logging.config.fileConfig("../conf/seed_mining_log.conf")
     reactor = HttpReactor()
+    threadpool = HttpThreadpool(max_workers=10, queue_size=10)
     config = ConfigParser.ConfigParser()
     config.read('../conf/seed_mining.conf')
     init_url = [
@@ -113,7 +117,7 @@ def main():
             #'http://www.xinhuanet.com/',
             ]
     for url in init_url:
-        miner_server = MinerServer(reactor, [url], config)
+        miner_server = MinerServer(reactor, threadpool, [url], config)
         t = threading.Thread(target=miner_server.start)
         t.setDaemon(True)
         t.start()

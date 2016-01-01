@@ -22,18 +22,15 @@ def to_unicode(bytes_str):
     >>> print to_unicode('中文编码')
     中文编码
     '''
-    error_count = 50
+    error_rate = 8.5
     gbk = bytes_str.decode('gbk', 'replace')
+    utf = bytes_str.decode('utf8', 'replace')
     gbk_count = gbk.count(u'\ufffd')
-    if gbk_count < error_count:
+    utf_count = utf.count(u'\ufffd')
+    if gbk_count * error_rate <= utf_count:
         return gbk.replace(u'\ufffd', '')
     else:
-        utf = bytes_str.decode('utf-8', 'replace')
-        utf_count = utf.count(u'\ufffd')
-        if utf_count < error_count or utf_count < gbk_count:
-            return utf.replace(u'\ufffd', '')
-        else:
-            return gbk.replace(u'\ufffd', '')
+        return utf.replace(u'\ufffd', '')
 
 
 def retry(max_tries=3, logger=None):

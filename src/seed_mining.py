@@ -64,7 +64,7 @@ class MinerServer(object):
 
     def process_error(self, failure, task):
         url = task.get('url')
-        #print failure.getTraceback()
+        print failure.getErrorMessage()
         self.logger.error("download error, url:%s, msg:%s" %
                 (url, failure.getTraceback()))
 
@@ -110,11 +110,11 @@ def main():
     config.read('../conf/seed_mining.conf')
     init_url = [
             'http://news.qq.com/',
-            #'http://news.163.com/',
+            'http://news.163.com/',
             'http://news.sina.com.cn/',
-            #'http://news.ifeng.com/',
-            #'http://news.sohu.com/',
-            #'http://www.xinhuanet.com/',
+            'http://news.ifeng.com/',
+            'http://news.sohu.com/',
+            'http://www.xinhuanet.com/',
             ]
     for url in init_url:
         miner_server = MinerServer(reactor, threadpool, [url], config)

@@ -2,16 +2,18 @@
 # coding=gbk
 
 from twisted.internet import reactor, task
-from twisted.web.client import Agent, readBody, RedirectAgent, BrowserLikeRedirectAgent
+from twisted.web.client import (Agent, readBody, RedirectAgent, BrowserLikeRedirectAgent,
+                                HTTPConnectionPool, )
 from twisted.web.http_headers import Headers
 from twisted.python import log
 
 class HttpReactor(object):
 
     def __init__(self, reactor_type='default'):
-        self.agent = Agent(reactor)
-        #self.redirect_agent = RedirectAgent(Agent(reactor))
-        self.redirect_agent = BrowserLikeRedirectAgent(Agent(reactor))
+        pool = HTTPConnectionPool(reactor)
+        self.agent = Agent(reactor, pool)
+        self.redirect_agent = RedirectAgent(Agent(reactor))
+        #self.redirect_agent = BrowserLikeRedirectAgent(Agent(reactor))
 
     def download_and_process(self, url, headers, requestProcess, bodyProcess, errProcess, method='GET',
             redirect=False, retry=3, delay=10):
@@ -21,7 +23,7 @@ class HttpReactor(object):
 
 
     def _download(self, url, headers, requestProcess, bodyProcess, errProcess, method='GET',
-            redirect=False, retry=3, delay=10):
+            redirect=False, retry=2, delay=10):
         if redirect:
             agent = self.redirect_agent
         else:
@@ -49,7 +51,7 @@ class HttpReactor(object):
         try:
             log.msg('error retry %d remaining' % retry_call.remaining)
             d = retry_call.next()
-        except:
+        except ValueError:
             log.msg('max retry')
         else:
             d.addErrback(self.retry_err_callback, retry_call, errProcess)
@@ -69,9 +71,24 @@ class RetryCall(object):
     def next(self):
         if self.remaining > 0:
             self.remaining -= 1
+            d = task.deferLater(reactor, self.delay, self.func, *self.args, **self.kw)
+            return d
         else:
             raise ValueError("end of iter.")
-        d = task.deferLater(reactor, self.delay, self.func, *self.args, **self.kw)
-        return d
 
 
+def main():
+    reac = HttpReactor()
+    def empty_func(obj):
+        pass
+    def error_func(body):
+        print str(body)[:100]
+        print "fail once"
+        raise Exception("must fail")
+    error_process = (error_func, [], {})
+    empty_process = (empty_func, [], {})
+    reac.download_and_process("http://www.baidu.com", None, empty_process, error_process, empty_process)
+    reac.run()
+
+if __name__ == '__main__':
+    main()

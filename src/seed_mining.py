@@ -15,7 +15,7 @@ from article_server import ArticleServer
 from db_helper import DBHelper
 from url_dedup import URLDedup
 from util import valid_a_href, to_unicode
-import lxml.html.clean
+import lxml.html
 
 
 class MinerServer(object):
@@ -28,6 +28,7 @@ class MinerServer(object):
         self.db_helper = DBHelper(conf)
         self.url_dedup = URLDedup(conf)
         self.cleaner = lxml.html.clean.Cleaner(style=True, scripts=True, page_structure=False, safe_attrs_only=False)
+        self.html_parser = lxml.html.HTMLParser(encoding='utf-8')
         self.init_url = init_url
 
     def _parse_conf(self, conf):
@@ -47,6 +48,7 @@ class MinerServer(object):
         #print url, body[:100][:1000]
         body_size = len(body)
         body = to_unicode(body)
+        body.replace('<?xml version="1.0" encoding="utf-8"?>', '')
         body = self.cleaner.clean_html(body)
         self.logger.info("page body, url:%s, body:%s" % (url, body[:100]))
         self.db_helper.save_mining_result(body, body_size, task)
@@ -60,7 +62,7 @@ class MinerServer(object):
             self.db_helper.insert_mining_task(task, not_exist)
             if not not_exist:
                 print not_exist
-        print url, body[:100]
+        #print url, body[:100]
 
     def process_error(self, failure, task):
         url = task.get('url')

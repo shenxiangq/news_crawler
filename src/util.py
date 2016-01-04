@@ -17,6 +17,24 @@ def valid_a_href(a_elements, main_url=None):
 
     return hrefs
 
+def valid_a_elements(a_elements, main_url=None):
+    al = [a for a in a_elements if a.get('href') and a.get('href').startswith('http://')]
+    if main_url:
+        main_tld = get_tld(main_url, fail_silently=True)
+        al = [a for a in al if get_tld(a.get('href'), fail_silently=True) == main_tld]
+    return al
+
+def get_html_path(node):
+    path_node = [node.tag]
+    iter_node = node
+    while iter_node is not None and iter_node.tag != 'body':
+        iter_node = iter_node.getparent()
+        path_node.append(iter_node.tag)
+    path_node.append('html')
+    path_node.append('')
+    path_node.reverse()
+    return '/'.join(path_node)
+
 def to_unicode(bytes_str):
     '''
     >>> print to_unicode('中文编码')

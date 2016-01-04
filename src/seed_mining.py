@@ -1,134 +1,90 @@
 #!/usr/bin/env python
 # coding=gbk
 
-import logging, logging.config, signal, sys, time, threading, Queue, ConfigParser
+import logging, logging.config, signal, sys, time, threading, Queue, ConfigParser, urllib2
 from pprint import pformat
 from datetime import datetime
-
-from http_reactor import HttpReactor
-from http_threadpool import HttpThreadpool
-from queue_service import BlockingQueueService
-from seed_scheduler import SeedScheduler, SeedHandler
-from item import SeedTask, MinerTask
-from hub_extractor import HubExtractor
-from article_server import ArticleServer
-from db_helper import DBHelper
-from url_dedup import URLDedup
-from util import valid_a_href, to_unicode
+from lxml.html import HTMLParser, document_fromstring
 import lxml.html
 
+from db_helper import DBHelper
+from util import valid_a_elements, get_html_path
 
-class MinerServer(object):
+class SeedMiner(object):
 
-    def __init__(self, reactor, pool, init_url, conf):
-        self.logger = logging.getLogger("")
-        self.reactor = reactor
-        self.pool = pool
-        self._parse_conf(conf)
+    def __init__(self, conf):
         self.db_helper = DBHelper(conf)
-        self.url_dedup = URLDedup(conf)
-        self.cleaner = lxml.html.clean.Cleaner(style=True, scripts=True, page_structure=False, safe_attrs_only=False)
-        self.html_parser = lxml.html.HTMLParser(encoding='utf-8')
-        self.init_url = init_url
+        self.parser = HTMLParser(encoding='utf-8', remove_comments=True, remove_blank_text=True)
 
-    def _parse_conf(self, conf):
-        self.get_delay = conf.getfloat('basic', 'delay')
-        self.task_number = conf.getint('basic', 'number')
-        self.maxdepth = conf.getint('basic', 'maxdepth')
+    def read_html(self, object_id):
+        try:
+            object_id = 'index.html'
+            fin = open('../data/mining_page/'+object_id)
+            body = fin.read()
+            body = body.decode('gbk').encode('utf-8')
+            tree = document_fromstring(body, parser=self.parser)
+            return tree
+        except IOError:
+            return None
 
-    def process_request(self, response, task):
-        url = task.get('url')
-        return
-        self.logger.info("http response, url:%s, code:%s, phrase:%s, headers:%s" %
-                (url, response.code, response.phrase,
-                pformat(list(response.headers.getAllRawHeaders()))))
+    def maybe_hub(self, url, tree):
+        a_elements = valid_a_elements(tree.xpath('//a'), url)
+        visited_a = set()
+        all_a = set(a_elements)
+        a_elements = [a for a in a_elements if a.text and len(a.text.strip()) >= 10]
+        block = []
+        max_div = 2
+        max_depth = 8
+        import pdb;pdb.set_trace()
+        for start_a in a_elements:
+            if start_a in visited_a:
+                continue
+            path = '/a'
+            iter_node = start_a
+            div_count = 0
+            loop_flag = True
+            for _ in xrange(max_depth):
+                if not loop_flag:
+                    break
+                if div_count > max_div or iter_node.tag == 'body':
+                    break
+                iter_node = iter_node.getparent()
+                if iter_node.tag in ('div', 'ul') and len(iter_node.getchildren()) > 1:
+                    div_count += 1
+                    sibling = iter_node.xpath('.'+path)
+                    if len(sibling) >= 3 and \
+                        all([x in all_a for x in sibling]):
+                        block.append((iter_node, path))
+                        [visited_a.add(x) for x in sibling]
+                        loop_flag = False
 
-    def process_body(self, body, task):
-        url = task.get('url')
-        #print url, body[:100][:1000]
-        body_size = len(body)
-        body = to_unicode(body)
-        body.replace('<?xml version="1.0" encoding="utf-8"?>', '')
-        body = self.cleaner.clean_html(body)
-        self.logger.info("page body, url:%s, body:%s" % (url, body[:100]))
-        self.db_helper.save_mining_result(body, body_size, task)
-        if task.get('depth') <= self.maxdepth:
-            tree = lxml.html.document_fromstring(body)
-            a_elements = tree.xpath('//a')
-            #import pdb;pdb.set_trace()
-            urls = valid_a_href(a_elements, url)
-            not_exist = self.url_dedup.insert_not_exist(urls)
-            #self.db_helper.insert_mining_task(task, urls)
-            self.db_helper.insert_mining_task(task, not_exist)
-            if not not_exist:
-                print not_exist
-        #print url, body[:100]
+                path = '/' + iter_node.tag + path
 
-    def process_error(self, failure, task):
-        url = task.get('url')
-        print failure.getErrorMessage()
-        self.logger.error("download error, url:%s, msg:%s" %
-                (url, failure.getTraceback()))
+        paths = []
+        for node, path in block:
+            paths.append(get_html_path(node) + path)
+        print len(block)
+        import pdb;pdb.set_trace()
+        for node, path in block:
+            ss = lxml.html.tostring(node)
 
-    def process_task(self, task):
-        #url = url.encode('utf-8')
-        url = task.get('url').encode('utf-8')
-        requestProcess = (self.process_request, (task,), {})
-        bodyProcess = (self.process_body, (task,), {})
-        errorProcess = (self.process_error, (task,), {})
+        return block
 
-        #print "process_task:", url
-        self.reactor.download_and_process(url, None, requestProcess, bodyProcess, errorProcess, redirect=True)
-        #self.pool.download_and_process(url, bodyProcess)
 
-    def start(self):
-        init_url = 'http://sports.163.com/'
-        init_url = 'http://www.sina.com/'
-        init_url = 'http://news.qq.com/'
-        init_url = 'http://v.qq.com/cover/n/nwpc69jp1freit0.html'
-        first_task = self.db_helper.init_mining_job(self.init_url, continue_run=False)
-        self.process_task(first_task)
-        while True:
-            try:
-                tasks = self.db_helper.get_mining_task(self.task_number)
-                #print 'mining task', tasks
-                for task in tasks:
-                    self.process_task(task)
-                time.sleep(self.get_delay)
-            except KeyboardInterrupt:
-                sys.exit(0)
-            except Exception as e:
-                print e
-                pass
+    def test(self):
+        for obj in self.db_helper.get_some_mining_task():
+            url = obj.get('url')
+            _id = str(obj.get('_id'))
+            tree = self.read_html(_id)
+            tree.make_links_absolute(url)
+            if tree is not None:
+                self.maybe_hub(url, tree)
 
 def main():
-    #signal.signal(signal.SIGINT, lambda : sys.exit(0))
-    #signal.signal(signal.SIGTERM, lambda : sys.exit(0))
-
-    logging.config.fileConfig("../conf/seed_mining_log.conf")
-    reactor = HttpReactor()
-    threadpool = HttpThreadpool(max_workers=10, queue_size=10)
-    config = ConfigParser.ConfigParser()
-    config.read('../conf/seed_mining.conf')
-    init_url = [
-            'http://news.qq.com/',
-            'http://news.163.com/',
-            'http://news.sina.com.cn/',
-            'http://news.ifeng.com/',
-            'http://news.sohu.com/',
-            'http://www.xinhuanet.com/',
-            ]
-    for url in init_url:
-        miner_server = MinerServer(reactor, threadpool, [url], config)
-        t = threading.Thread(target=miner_server.start)
-        t.setDaemon(True)
-        t.start()
-
-    url = 'http://sports.163.com/'
-    #first_task = miner_server.db_helper.init_mining_job(url)
-    #miner_server.process_task(first_task)
-
-    reactor.run()
+    conf = ConfigParser.ConfigParser()
+    conf.read('../conf/mining_crawler.conf')
+    miner = SeedMiner(conf)
+    miner.test()
 
 if __name__ == '__main__':
     main()

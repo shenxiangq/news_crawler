@@ -55,4 +55,7 @@ class DBHelper(object):
         if ts:
             self.task_co.insert_many(ts)
 
+    def get_some_mining_task(self, limit_start=0, limit_number=10):
+        rs = self.task_co.find().sort('_id', 1).skip(limit_start).limit(limit_number)
+        return list(rs)
 

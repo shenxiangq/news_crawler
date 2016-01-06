@@ -1,9 +1,9 @@
 # coding=utf-8
 
-import logging
-from tld import get_tld
+import logging, re, copy
 import chardet, sys
 import functools
+from tld import get_tld
 
 def init_log(filename):
     logging.basicConfig(filename)
@@ -25,15 +25,44 @@ def valid_a_elements(a_elements, main_url=None):
     return al
 
 def get_html_path(node):
-    path_node = [node.tag]
+    path_node = []
     iter_node = node
     while iter_node is not None and iter_node.tag != 'body':
-        iter_node = iter_node.getparent()
         path_node.append(iter_node.tag)
+        iter_node = iter_node.getparent()
     path_node.append('html')
     path_node.append('')
     path_node.reverse()
     return '/'.join(path_node)
+
+NONE_STYLE_RX = re.compile(r'display\s*:\s*none')
+def remove_display_none(tree):
+    to_remove = []
+    for e in tree.iter():
+        style = e.get('style')
+        if style and NONE_STYLE_RX.search(style):
+            e.drop_tree()
+    return tree
+
+def p_raw_content(raw_p):
+    p = copy.deepcopy(raw_p)
+    for e in p.iter():
+        if e.tag == 'a':
+            e.drop_tag()
+    return p.text_content() or ''
+
+def contains_tag(tag, tag_list):
+    for e in tag.iter():
+        if e in tag_list:
+            return True
+    return False
+
+CHINESE_CODE_RX = re.compile(ur'[\u4e00-\u9fa5]+')
+def extract_chinese_code(unicode_str):
+    if isinstance(unicode_str, unicode):
+        return u''.join(CHINESE_CODE_RX.findall(unicode_str))
+    else:
+        raise ValueError('must be unicode string')
 
 def to_unicode(bytes_str):
     '''

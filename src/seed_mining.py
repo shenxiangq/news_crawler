@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding=gbk
 
-import logging, logging.config, signal, sys, time, threading, Queue, ConfigParser, urllib2, re, traceback
+import logging, logging.config, signal, sys, time, threading, Queue, ConfigParser, urllib2, re, traceback, urlparse
 from pprint import pformat
 from datetime import datetime
 from lxml.html import HTMLParser, document_fromstring, fromstring
@@ -10,7 +10,7 @@ from readability.readability import Document
 
 from db_helper import DBHelper
 from util import (valid_a_elements, get_html_path, remove_display_none,
-            p_raw_content, contains_tag, extract_chinese_code)
+            p_raw_content, contains_tag, filter_string)
 
 BLOCK_TAG = ('div', 'ul')
 
@@ -38,22 +38,25 @@ class SeedMiner(object):
         return tree
 
     def maybe_hub(self, url, tree):
-        block, matched_a = self.get_hub_block(url, tree)
-        tree = self.remove_p_aside_a(block, tree)
+        if self.match_filter_url(url):
+            return False, []
+
+        block, matched_a, paths = self.get_hub_block(url, tree)
+        tree = self.remove_p_aside_a(block, tree, matched_a)
         content_tree = self.get_readability_content(url, tree)
         content = unicode(content_tree.text_content().strip())
         content = re.sub(ur'\s', u'', content)
-        chinese_content = extract_chinese_code(content)
+        chinese_content = filter_string(content, False, True, True)
         a_content = sum([len(a.text.strip()) for a in matched_a])
         ratio = len(chinese_content)*1.0/(a_content or 0.001)
-        print 'url:%s match content/link:%f' % (url, ratio)
-        print len(content), content.encode('utf-8')
+        print 'url:%s matched_a:%d match content/link:%f' % (url, len(matched_a), ratio)
+        print len(chinese_content), content.encode('utf-8')
 
         #import pdb;pdb.set_trace()
-        if len(matched_a) > 20 and len(chinese_content) < 150 and ratio < 0.2:
-            return True
+        if len(matched_a) > 20 and len(chinese_content) < 200 and ratio < 0.2:
+            return True, paths
         else:
-            return False
+            return False, paths
 
     def get_readability_content(self, url, tree):
         body = lxml.html.tostring(tree)
@@ -70,7 +73,7 @@ class SeedMiner(object):
         block = []
         max_div = 2
         max_depth = 8
-        min_link_number = 3
+        min_link_number = 4
         for start_a in long_a:
             if start_a in visited_a:
                 continue
@@ -105,31 +108,40 @@ class SeedMiner(object):
             paths.append(get_html_path(node) + path)
         print len(block)
         #import pdb;pdb.set_trace()
-        for node, path, long_a in block:
-            ss = lxml.html.tostring(node)
+        return block, matched_a, paths
 
-        return block, matched_a
-
-    def remove_p_aside_a(self, block, tree):
+    def remove_p_aside_a(self, block, tree, matched_a):
+        matched_a = set(matched_a)
         for node, path, long_a in block:
             for e in node.iter():
                 text = e.text or ''
                 text = text.strip()
-                if len(text) < 100 and e not in long_a:
+                if len(text) < 100 and e not in matched_a:
                     e.text = ''
 
         return tree
 
+    URL_FILTER_RX = re.compile('''news.xinhuanet.com/video/.+/c_\d+.htm''')
+
+    def match_filter_url(self, url):
+        if self.URL_FILTER_RX.search(url):
+            return True
+        else:
+            return False
+
     def test(self):
         fout =  open('../data/mining_result.txt', 'w')
-        for obj in self.db_helper.get_some_mining_task(0, 10000):
+        for obj in self.db_helper.get_some_mining_task(0, 180000):
             url = obj.get('url')
             _id = str(obj.get('_id'))
             tree = self.read_html(_id, url)
             if tree is not None:
                 try:
-                    rs = self.maybe_hub(url, tree)
-                    fout.write(str(rs) + ' ' + url + '\n')
+                    flag, paths = self.maybe_hub(url, tree)
+                    aline = [str(flag), url, str(paths)]
+                    fout.write('\t'.join(aline) + '\n')
+                except KeyboardInterrupt:
+                    sys.exit(1)
                 except:
                     print "ERROR!"
                     traceback.print_exc()
@@ -145,3 +157,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

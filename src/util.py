@@ -1,6 +1,6 @@
 # coding=utf-8
 
-import logging, re, copy
+import logging, re, copy, string
 import chardet, sys
 import functools
 from tld import get_tld
@@ -27,7 +27,7 @@ def valid_a_elements(a_elements, main_url=None):
 def get_html_path(node):
     path_node = []
     iter_node = node
-    while iter_node is not None and iter_node.tag != 'body':
+    while iter_node is not None and iter_node.tag != 'html':
         path_node.append(iter_node.tag)
         iter_node = iter_node.getparent()
     path_node.append('html')
@@ -63,6 +63,23 @@ def extract_chinese_code(unicode_str):
         return u''.join(CHINESE_CODE_RX.findall(unicode_str))
     else:
         raise ValueError('must be unicode string')
+
+def filter_string(astring, digit=False, letter=False, punctuation=False, only_chinese=False):
+    if not isinstance(astring, unicode):
+        raise ValueError('string must be unicode')
+    if only_chinese:
+        return u''.join(CHINESE_CODE_RX.findall(astring))
+    to_remove = ''
+    if digit:
+        to_remove += string.digits
+    if letter:
+        to_remove += string.ascii_letters
+    if punctuation:
+        to_remove += string.punctuation
+    if to_remove:
+        return re.sub('['+to_remove+']', '', astring)
+    else:
+        return astring
 
 def to_unicode(bytes_str):
     '''

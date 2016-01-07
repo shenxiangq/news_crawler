@@ -4,18 +4,17 @@
 import logging, logging.config, signal, sys, time, threading, Queue, ConfigParser
 from pprint import pformat
 from datetime import datetime
+import lxml.html
 
 from http_reactor import HttpReactor
 from http_threadpool import HttpThreadpool
 from queue_service import BlockingQueueService
-from seed_scheduler import SeedScheduler, SeedHandler
 from item import SeedTask, MinerTask
 from hub_extractor import HubExtractor
 from article_server import ArticleServer
 from db_helper import DBHelper
 from url_dedup import URLDedup
 from util import valid_a_href, to_unicode
-import lxml.html
 
 
 class MinerServer(object):

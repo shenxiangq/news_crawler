@@ -38,7 +38,8 @@ class MiningScheduler(object):
                 args=(job,),
                 seconds=interval,
                 next_run_time=next_run_time,
-                id=str(job.get('_id'))
+                id=str(job.get('_id')),
+                misfire_grace_time=10,
                 )
 
     def init_seed(self):

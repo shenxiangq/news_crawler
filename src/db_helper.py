@@ -25,15 +25,16 @@ class DBHelper(object):
 
     def init_mining_job(self, urls, continue_run=True):
         if continue_run:
-            last_job = self.job_co.find({'url': {'$in': urls}}).sort('_id', -1).limit(1).next()
+            last_job = self.job_co.find().sort('_id', -1).limit(1).next()
             self.job_id = last_job.get('_id')
             task_id = last_job.get('last_task')
+            return self.task_co.find_one({'_id': task_id})
         else:
             rs = self.task_co.insert_many([{'url': url, 'time': datetime.now(), 'depth': 1} for url in urls])
             task_ids = rs.inserted_ids
             self.job_id = self.job_co.insert({'last_task': task_ids[0], 'time': datetime.now()})
             self.task_co.update_many({'_id': {'$in': task_ids}}, {'$set': {'job_id': self.job_id}})
-        return self.task_co.find_one({'_id': task_ids[0]})
+            return self.task_co.find_one({'_id': task_ids[0]})
 
     def save_mining_result(self, body, body_size, task, use_file=True):
         if use_file:

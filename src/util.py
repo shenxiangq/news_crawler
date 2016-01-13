@@ -1,6 +1,6 @@
 # coding=utf-8
 
-import logging, re, copy, string
+import logging, re, copy, string, traceback
 import chardet, sys
 import functools
 from tld import get_tld
@@ -108,7 +108,7 @@ def retry(max_tries=3, logger=None):
                 except KeyboardInterrupt:
                     sys.exit(1)
                 except Exception as e:
-                    print e
+                    print e, args
                 remain -= 1
             return func(*args, **kw)
         return wrapper

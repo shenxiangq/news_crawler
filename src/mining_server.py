@@ -1,4 +1,4 @@
-import logging, logging.config, ConfigParser, gzip, re
+import logging, logging.config, ConfigParser, gzip, re, traceback
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import apscheduler.events
@@ -86,7 +86,8 @@ class MiningServer(object):
                 g.write(body.encode('utf-8'))
             finally:
                 g.close()
-        print body[:100].encode('utf-8')
+        print url
+        #print body[:100].encode('utf-8')
 
     def process_error(self, failure, url, obj_id):
         print failure.getErrorMessage()
@@ -131,12 +132,25 @@ class SeedAnalyzer(object):
             update_rate = self.update_rate(blocks)
             if update_rate > 0.0:
                 for title in titles:
-                    print '@@'.join(title)
+                    #print '@@'.join(title)
+                    pass
                 print update_rate
 
+        all_blocks = []
+        for link_tree in link_trees:
+            merged = []
+            for block in link_tree.blocks:
+                merged.extend(block)
+            all_blocks.append(list(set(merged)))
+        total_update_rate = self.update_rate(all_blocks)
+        print url, ' all:', total_update_rate
+
         [link_tree.filter_index(to_remove) for link_tree in link_trees]
+        return total_update_rate
 
     def update_rate(self, blocks):
+        if not blocks:
+            return 0.0
         max_block = max(blocks, key=len)
         max_length = len(max_block)
         period = len(blocks)
@@ -152,9 +166,16 @@ class SeedAnalyzer(object):
         return update_per_period
 
     def analyze(self):
-        jobs = list(self.conn.mining_seed_job.find().sort('_id',1).skip(208).limit(2))
-        for job in jobs:
-            self.frequency_analyze(job)
+        jobs = list(self.conn.mining_seed_job.find().sort('_id',1).skip(0).limit(100))
+        jobs = list(self.conn.mining_seed_job.find())
+        with open('../data/analyze.txt', 'w') as fout:
+            for job in jobs:
+                try:
+                    update_rate = self.frequency_analyze(job)
+                    result = [str(job.get('_id')), job.get('url'), str(update_rate)]
+                    fout.write('\t'.join(result) + '\n')
+                except Exception as e:
+                    traceback.print_exec()
 
     def read_all_task(self, job_id):
         tasks = self.conn.mining_seed_task.find({'job_id': job_id})

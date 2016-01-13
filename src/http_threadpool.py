@@ -12,7 +12,7 @@ class HttpThreadpool(object):
     def _download(self, url):
         req = urllib2.Request(url)
         req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.93 Safari/537.36')
-        rsp = urllib2.urlopen(req, timeout=5)
+        rsp = urllib2.urlopen(req, timeout=30)
         return rsp.read()
 
     def download_and_process(self, url, body_process):
@@ -21,7 +21,10 @@ class HttpThreadpool(object):
     def _download_and_process(self, url, body_process):
         body_func, body_args, body_kw = body_process
         body = self._download(url)
-        body_func(body, *body_args, **body_kw)
+        try:
+            body_func(body, *body_args, **body_kw)
+        except Exception as e:
+            print url, traceback.format_exec()
 
     def shutdown(self):
         self.executor.shutdown()

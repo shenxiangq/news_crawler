@@ -19,7 +19,7 @@ from util import valid_a_href, to_unicode
 
 class MinerServer(object):
 
-    def __init__(self, reactor, pool, init_url, conf):
+    def __init__(self, reactor, pool, init_url, conf, use_pool=False):
         self.logger = logging.getLogger("")
         self.reactor = reactor
         self.pool = pool
@@ -29,6 +29,7 @@ class MinerServer(object):
         self.cleaner = lxml.html.clean.Cleaner(style=True, scripts=True, page_structure=False, safe_attrs_only=False)
         self.html_parser = lxml.html.HTMLParser(encoding='utf-8')
         self.init_url = init_url
+        self.use_pool = use_pool
 
     def _parse_conf(self, conf):
         self.get_delay = conf.getfloat('basic', 'delay')
@@ -59,8 +60,6 @@ class MinerServer(object):
             not_exist = self.url_dedup.insert_not_exist(urls)
             #self.db_helper.insert_mining_task(task, urls)
             self.db_helper.insert_mining_task(task, not_exist)
-            if not not_exist:
-                print not_exist
         #print url, body[:100]
 
     def process_error(self, failure, task):
@@ -77,28 +76,47 @@ class MinerServer(object):
         errorProcess = (self.process_error, (task,), {})
 
         #print "process_task:", url
-        self.reactor.download_and_process(url, None, requestProcess, bodyProcess, errorProcess, redirect=True)
-        #self.pool.download_and_process(url, bodyProcess)
+        if self.use_pool:
+            self.pool.download_and_process(url, bodyProcess)
+        else:
+            self.reactor.download_and_process(url, None, requestProcess, bodyProcess, errorProcess, redirect=True)
 
-    def start(self):
-        init_url = 'http://sports.163.com/'
-        init_url = 'http://www.sina.com/'
-        init_url = 'http://news.qq.com/'
-        init_url = 'http://v.qq.com/cover/n/nwpc69jp1freit0.html'
-        first_task = self.db_helper.init_mining_job(self.init_url, continue_run=False)
-        self.process_task(first_task)
-        while True:
-            try:
-                tasks = self.db_helper.get_mining_task(self.task_number)
+    def start(self, performance=False):
+        if not performance:
+            first_task = self.db_helper.init_mining_job(self.init_url, continue_run=False)
+            self.process_task(first_task)
+            while True:
+                try:
+                    tasks = self.db_helper.get_mining_task(self.task_number)
+                    #print 'mining task', tasks
+                    for task in tasks:
+                        self.process_task(task)
+                    time.sleep(self.get_delay)
+                except KeyboardInterrupt:
+                    sys.exit(0)
+                except Exception as e:
+                    print e
+
+        else:
+            total = 0
+            print datetime.now()
+            while True:
+                tasks = list(self.db_helper.task_co.find().sort('_id', 1).skip(total).limit(self.task_number))
+                total += self.task_number
+                if total > 150000:
+                    print datetime.now()
+                    break
                 #print 'mining task', tasks
                 for task in tasks:
-                    self.process_task(task)
-                time.sleep(self.get_delay)
-            except KeyboardInterrupt:
-                sys.exit(0)
-            except Exception as e:
-                print e
-                pass
+                    try:
+                        task['depth'] = 10
+                        self.process_task(task)
+                    except KeyboardInterrupt:
+                        sys.exit(0)
+                    except Exception as e:
+                        print e, args
+                if not self.use_pool:
+                    time.sleep(self.get_delay)
 
 def main():
     #signal.signal(signal.SIGINT, lambda : sys.exit(0))
@@ -106,7 +124,7 @@ def main():
 
     logging.config.fileConfig("../conf/log_mining_crawler.conf")
     reactor = HttpReactor()
-    threadpool = HttpThreadpool(max_workers=10, queue_size=10)
+    threadpool = HttpThreadpool(30, 200)
     config = ConfigParser.ConfigParser()
     config.read('../conf/mining_crawler.conf')
     init_url = [
@@ -117,9 +135,10 @@ def main():
             'http://news.sohu.com/',
             'http://www.xinhuanet.com/',
             ]
+    init_url = ['http://news.qq.com/']
     for url in init_url:
-        miner_server = MinerServer(reactor, threadpool, [url], config)
-        t = threading.Thread(target=miner_server.start)
+        miner_server = MinerServer(reactor, threadpool, [url], config, True)
+        t = threading.Thread(target=miner_server.start, args=(True,))
         t.setDaemon(True)
         t.start()
 

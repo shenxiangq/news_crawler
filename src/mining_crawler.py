@@ -15,6 +15,7 @@ from article_server import ArticleServer
 from db_helper import DBHelper
 from url_dedup import URLDedup
 from util import valid_a_href, to_unicode
+from flow_control import TimeFlowControl
 
 
 class MinerServer(object):
@@ -30,6 +31,7 @@ class MinerServer(object):
         self.html_parser = lxml.html.HTMLParser(encoding='utf-8')
         self.init_url = init_url
         self.use_pool = use_pool
+        self.flow_control = TimeFlowControl(1, 60)
 
     def _parse_conf(self, conf):
         self.get_delay = conf.getfloat('basic', 'delay')
@@ -49,7 +51,7 @@ class MinerServer(object):
         body_size = len(body)
         body = to_unicode(body)
         body.replace('<?xml version="1.0" encoding="utf-8"?>', '')
-        body = self.cleaner.clean_html(body)
+        #body = self.cleaner.clean_html(body)
         self.logger.info("page body, url:%s, body:%s" % (url, body[:100]))
         self.db_helper.save_mining_result(body, body_size, task)
         if task.get('depth') <= self.maxdepth:
@@ -65,6 +67,7 @@ class MinerServer(object):
     def process_error(self, failure, task):
         url = task.get('url')
         print failure.getErrorMessage()
+        self.flow_control.add()
         self.logger.error("download error, url:%s, msg:%s" %
                 (url, failure.getTraceback()))
 
@@ -85,12 +88,27 @@ class MinerServer(object):
         if not performance:
             first_task = self.db_helper.init_mining_job(self.init_url, continue_run=False)
             self.process_task(first_task)
+            offset = 0
+            max_task = self.task_number
             while True:
                 try:
                     tasks = self.db_helper.get_mining_task(self.task_number)
                     #print 'mining task', tasks
                     for task in tasks:
                         self.process_task(task)
+                    offset += 1
+                    if offset > 5:
+                        offset = 0
+                        time_delta = 5
+                        error_count = self.flow_control.last_n_count(time_delta)
+                        print 'error_count', error_count
+                        if error_count *1.0/ time_delta > 1:
+                            self.task_number -= 1
+                            print 'decrease task_number:', self.task_number
+                        else:
+                            self.task_number = max_task if self.task_number >= max_task else self.task_number+1
+                            print 'increase task_number:', self.task_number
+
                     time.sleep(self.get_delay)
                 except KeyboardInterrupt:
                     sys.exit(0)
@@ -124,7 +142,7 @@ def main():
 
     logging.config.fileConfig("../conf/log_mining_crawler.conf")
     reactor = HttpReactor()
-    threadpool = HttpThreadpool(30, 200)
+    threadpool = HttpThreadpool(40, 200)
     config = ConfigParser.ConfigParser()
     config.read('../conf/mining_crawler.conf')
     init_url = [
@@ -137,8 +155,8 @@ def main():
             ]
     init_url = ['http://news.qq.com/']
     for url in init_url:
-        miner_server = MinerServer(reactor, threadpool, [url], config, True)
-        t = threading.Thread(target=miner_server.start, args=(True,))
+        miner_server = MinerServer(reactor, threadpool, [url], config, False)
+        t = threading.Thread(target=miner_server.start, args=(False,))
         t.setDaemon(True)
         t.start()
 

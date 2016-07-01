@@ -46,11 +46,17 @@ def test_dedup():
     now = datetime.datetime.now()
     co.create_index([('md5','hashed')])
     objs = []
+    ll = []
+    oset = set()
+    start = time.time()
     for i in xrange(n):
         url = prefix + str(i)
         b = Binary(md5(url).digest())
         objs.append({'md5': b})
+        #ll.append(md5(url).digest())
         #co.insert_one({'url': url, 'md5': b, 'last_access': now })
+    end = time.time()
+    print 'total time:%.3f' % (end - start)
     start = time.time()
     co.insert_many(objs)
     end = time.time()
@@ -64,12 +70,25 @@ def test_dedup():
         b = Binary(md5(url).digest())
         query.append(b)
     start = time.time()
-    rs = co.find({'md5': {'$in': query}})
-    list(rs)
+    #rs = co.find({'md5': {'$in': query}})
+    #list(rs)
     end = time.time()
     print 'total time:%.3f' % (end - start)
     print '%.3f / second' % (n/(end-start))
 
+    start = time.time()
+    for x in ll:
+        oset.add(x)
+    end = time.time()
+    print 'total time:%.3f' % (end - start)
+    print '%.3f / second' % (n/(end-start))
+
+    start = time.time()
+    for x in ll:
+        pp = x in oset
+    end = time.time()
+    print 'total time:%.3f' % (end - start)
+    print '%.3f / second' % (n/(end-start))
 
 if __name__ == '__main__':
     #insert()

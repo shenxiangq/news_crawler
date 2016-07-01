@@ -1,4 +1,4 @@
-import time, chardet, functools, re
+import time, chardet, functools, re, hashlib, random
 from chardet.universaldetector import UniversalDetector
 
 def timetest(repeat=1):
@@ -34,11 +34,18 @@ def error_dist(strs):
     utf_count = uu.encode('utf8').decode('gbk','replace').count(u'\ufffd')
     print gbk_count, utf_count
 
+@timetest(10*6)
+def md5_hash(url):
+    url += str(random.random())
+    s = hashlib.md5(url)
+    return s.digest()
+
 
 def main():
-    body = ''.join(open('index.html', 'rb').readlines())
-    print to_unicode(body)[:1000]
+    #body = ''.join(open('index.html', 'rb').readlines())
+    #print to_unicode(body)[:1000]
     #print error_dist(body)
+    md5_hash('http://ahttps://docs.python.org/3/library/functools.html')
 
 if __name__ == '__main__':
     main()
